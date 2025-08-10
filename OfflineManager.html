@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OfflineManager - Local Password Vault</title>
+<style>
+  :root { --bg:#000; --card-bg:rgba(20,20,20,0.85); --muted:#9aa6b2; --accent1:#00fff0; --accent2:#8a2be2; }
+  html, body { height:100%; margin:0; }
+  body {
+    background:var(--bg);
+    color:#e6eef6;
+    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding:28px;
+    overflow:hidden;
+  }
+  .ambient-layer { position:fixed; left:0; top:0; width:100%; height:100%; pointer-events:none; mix-blend-mode:screen; z-index:1; }
+  .light {
+    position:absolute; border-radius:50%; transform:translate(-50%,-50%);
+    filter:blur(80px) saturate(140%);
+    opacity:0.65;
+  }
+  .light.aqua { background: radial-gradient(circle, var(--accent1), rgba(0,0,0,0)); }
+  .wrap { position:relative; max-width:900px; margin:0 auto; z-index:5; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:18px; }
+  .logo { font-size:20px; font-weight:700; color:var(--accent1); letter-spacing:0.5px; }
+  h1 { font-size:22px; margin:0; font-weight:700; letter-spacing:0.4px; }
+  .subtitle { color:var(--muted); font-size:13px; }
+  .card { background:var(--card-bg); padding:18px; border-radius:12px; border:1px solid rgba(255,255,255,0.04); box-shadow:0 6px 24px rgba(0,0,0,0.6); backdrop-filter:blur(6px); }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  input, textarea, button { font-family:inherit; box-sizing:border-box; }
+  input, textarea { width:100%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:#0f1113; color:#e6eef6; }
+  textarea { min-height:80px; }
+  .actions { display:flex; gap:10px; align-items:center; margin-top:10px; }
+  .btn { padding:10px 14px; border-radius:8px; border:none; font-weight:600; cursor:pointer; background:linear-gradient(90deg, var(--accent1), var(--accent2)); color:#02151a; }
+  .btn:active { transform:translateY(1px); }
+  .list { margin-top:20px; display:flex; flex-direction:column; gap:12px; }
+  .entry { display:flex; justify-content:space-between; align-items:center; padding:12px; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03); }
+  .meta { color:var(--muted); font-size:13px; }
+  .small { font-size:12px; color:var(--muted); }
+  footer { margin-top:18px; text-align:center; color:var(--muted); font-size:13px; }
+  @media (max-width:640px) { .form-row { grid-template-columns:1fr; } .wrap { padding:0 12px; } }
+</style>
+</head>
+<body>
+  <div class="ambient-layer" aria-hidden="true">
+    <div class="light aqua" id="lightA"></div>
+  </div>
+  <div class="wrap">
+    <header>
+      <div class="logo">OfflineManager</div>
+      <div>
+        <h1>Local Password Vault</h1>
+        <div class="subtitle">Secure • Offline • Local-only — your data stays on this device</div>
+      </div>
+    </header>
+    <div class="card">
+      <h2 style="margin:0 0 10px 0">Add Entry</h2>
+      <div class="form-row">
+        <div><input id="name" placeholder="Name of Site" /></div>
+        <div><input id="username" placeholder="Username" /></div>
+      </div>
+      <div style="margin-top:10px">
+        <input id="password" placeholder="Password" />
+      </div>
+      <div style="margin-top:10px">
+        <textarea id="notes" placeholder="Notes (optional)"></textarea>
+      </div>
+      <div class="actions">
+        <button id="add" class="btn">Add</button>
+      </div>
+    </div>
+    <div class="list card" id="list"></div>
+    <footer>OfflineManager — Secure. Simple. Local. (Offline tools can be imperfect — double-check critical data.)</footer>
+  </div>
+<script>
+const STORAGE_KEY = 'om_pw_vault_v1';
+function loadVault(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY))||{} }catch(e){return{}} }
+function saveVault(v){ localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); }
+function addEntry(){ const name=document.getElementById('name').value.trim(); const username=document.getElementById('username').value.trim(); const password=document.getElementById('password').value; const notes=document.getElementById('notes').value.trim(); if(!name) return alert('Name of Site is required'); const v=loadVault(); const id=Date.now().toString(36); v[id]={name,username,password,notes,created:new Date().toISOString()}; saveVault(v); renderList(); document.getElementById('name').value=''; document.getElementById('username').value=''; document.getElementById('password').value=''; document.getElementById('notes').value=''; }
+function delEntry(id){ if(!confirm('Delete this entry?')) return; const v=loadVault(); delete v[id]; saveVault(v); renderList(); }
+function copyText(t){ navigator.clipboard.writeText(t).then(()=>{alert('Copied to clipboard')}).catch(()=>alert('Copy failed')) }
+function renderList(){ const container=document.getElementById('list'); container.innerHTML=''; const v=loadVault(); const keys=Object.keys(v).sort((a,b)=> v[b].created.localeCompare(v[a].created)); if(keys.length===0){ container.innerHTML='<div class="small">No entries yet.</div>'; return; } keys.forEach(id=>{ const e=v[id]; const row=document.createElement('div'); row.className='entry'; row.innerHTML=`<div><div style="font-weight:700">${escapeHtml(e.name)}</div><div class="meta">${escapeHtml(e.username)} · <span class="small">${new Date(e.created).toLocaleString()}</span></div></div><div style="text-align:right"><button class="btn" onclick="copyText('${escapeJs(e.password)}')" style="padding:8px 10px;font-weight:600">Copy</button> <button class="btn" onclick="delEntry('${id}')" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04);">Delete</button></div>`; container.appendChild(row); }); }
+function escapeHtml(s){ return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;') : ''; }
+function escapeJs(s){ return s ? String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n') : ''; }
+document.getElementById('add').addEventListener('click', addEntry); renderList();
+// Single aqua light follows mouse smoothly
+const lightA=document.getElementById('lightA'); let mouseX=window.innerWidth/2, mouseY=window.innerHeight/2; let posX=mouseX, posY=mouseY; const ease=0.15; window.addEventListener('pointermove',(e)=>{ mouseX=e.clientX; mouseY=e.clientY; }); function animate(){ posX+=(mouseX-posX)*ease; posY+=(mouseY-posY)*ease; lightA.style.transform=`translate(${posX}px, ${posY}px)`; requestAnimationFrame(animate); } function initLight(){ const w=Math.max(300,Math.min(700,window.innerWidth*0.35)); lightA.style.width=lightA.style.height=w+'px'; } initLight(); animate(); window.addEventListener('resize', initLight);
+</script>
+</body>
+</html>
